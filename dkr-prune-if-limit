@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+##############################################
+#Check if server reaches storage threshold   #
+#and delete unused docker related resources  #
+#(images, volumes, cache..)                  #
+##############################################
+
+set -euo pipefail
+
+THRESHOLD_GB=30
+LOG="/var/log/docker-prune-if-lowspace.log"
+LOCK="/var/lock/docker-prune-if-lowspace.lock"
+
+# Get free space on / in GB (integer)
+FREE_GB="$(df -BG / | awk 'NR==2 {gsub(/G/,"",$4); print $4}')"
+
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+
+# Skip if docker isn't available
+if ! command -v docker >/dev/null 2>&1; then
+  echo "$(timestamp) docker not found; skipping" >> "$LOG"
+  exit 0
+fi
+
+# Run at most one instance at a time
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  echo "$(timestamp) lock busy; skipping" >> "$LOG"
+  exit 0
+fi
+
+if [ "$FREE_GB" -le "$THRESHOLD_GB" ]; then
+  echo "$(timestamp) FREE=${FREE_GB}GB <= ${THRESHOLD_GB}GB: running docker system prune" >> "$LOG"
+  docker info >/dev/null 2>&1 || { echo "$(timestamp) docker not responsive; skipping" >> "$LOG"; exit 0; }
+  docker system prune -a -f --volumes >> "$LOG" 2>&1
+  echo "$(timestamp) done" >> "$LOG"
+else
+  echo "$(timestamp) FREE=${FREE_GB}GB > ${THRESHOLD_GB}GB: no action" >> "$LOG"
+fi
