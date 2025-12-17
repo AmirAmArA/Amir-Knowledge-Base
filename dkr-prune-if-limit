@@ -3,7 +3,10 @@
 #Check if server reaches storage threshold   #
 #and delete unused docker related resources  #
 #(images, volumes, cache..)                  #
-##############################################
+###############################################################
+# use this cron job to run it periodically :                  #
+# */15 * * * * root /usr/local/sbin/docker-prune-if-lowspace  #
+###############################################################
 
 set -euo pipefail
 
